@@ -1,47 +1,105 @@
 using UnityEngine;
 
+/// <summary>
+/// Manages the dynamic spawning of vehicles. 
+/// Progressively increases difficulty by reducing spawn intervals until Boss Mode is reached.
+/// </summary>
 public class CarSpawner : MonoBehaviour
 {
-    [Header("Doğma Noktaları (Duvarlar)")]
-    public Transform[] spawnWalls;
-
-    [Header("Araç Modelleri")]
+    [Header("Spawn Settings")]
+    [Tooltip("Array of vehicle prefabs to be spawned.")]
     public GameObject[] carPrefabs;
 
-    private float spawnInterval = 3f; // Başlangıçta 3 saniyede bir araç
-    private float timer = 0f;
-    private float difficultyTimer = 0f;
+    [Tooltip("Array of wall objects where vehicles will spawn from.")]
+    public GameObject[] spawnWalls;
 
-    void Update()
+    [Header("Difficulty & Time Settings")]
+    [Tooltip("Starting time delay (in seconds) between each spawn.")]
+    public float initialSpawnInterval = 3f;
+
+    [Tooltip("Minimum time delay between spawns (Maximum difficulty / Boss Mode).")]
+    public float bossModeSpawnInterval = 0.5f;
+
+    [Tooltip("How much the spawn interval decreases each time difficulty scales up.")]
+    public float difficultyDecrement = 0.2f;
+
+    [Tooltip("Time interval (in seconds) required to increase the game difficulty.")]
+    public float difficultyIncreaseTimer = 5f;
+
+    // Internal state variables 
+    // Not: Profesyonel C# standartlarında private değişkenler alt tire (_) ile başlar.
+    private float _currentSpawnInterval;
+    private float _spawnTimer;
+    private float _difficultyTimer;
+    private bool _isBossMode = false;
+
+    private void Start()
     {
-        timer += Time.deltaTime;
-        difficultyTimer += Time.deltaTime;
+        // Oyunu başlangıç zorluğu ile başlat
+        _currentSpawnInterval = initialSpawnInterval;
+    }
 
-        // Her 10 saniyede bir araçların çıkış hızını artır (Zorluk seviyesi)
-        if (difficultyTimer >= 10f)
-        {
-            if (spawnInterval > 0.8f) // Ekranın tamamen arabayla dolmasını engellemek için sınır
-            {
-                spawnInterval -= 0.2f;
-            }
-            difficultyTimer = 0f;
-        }
+    private void Update()
+    {
+        HandleSpawning();
+        HandleDifficultyProgression();
+    }
 
-        // Kronometre dolduğunda yeni araç yarat
-        if (timer >= spawnInterval)
+    /// <summary>
+    /// Handles the countdown and instantiation of vehicles.
+    /// </summary>
+    private void HandleSpawning()
+    {
+        _spawnTimer += Time.deltaTime;
+
+        if (_spawnTimer >= _currentSpawnInterval)
         {
-            SpawnCar();
-            timer = 0f;
+            SpawnRandomVehicle();
+            _spawnTimer = 0f; // Spawn sayacını sıfırla
         }
     }
 
-    void SpawnCar()
+    /// <summary>
+    /// Gradually decreases the spawn interval to increase game difficulty over time.
+    /// Clamps at bossModeSpawnInterval.
+    /// </summary>
+    private void HandleDifficultyProgression()
     {
-        // Rastgele bir duvar ve rastgele bir araç modeli seç
-        int randomWall = Random.Range(0, spawnWalls.Length);
-        int randomCar = Random.Range(0, carPrefabs.Length);
+        // Eğer zaten maksimum zorluktaysak (Boss Mode), hesaplama yapmayı bırakarak performansı koru
+        if (_isBossMode) return;
 
-        // Seçilen aracı, seçilen duvarın konumu ve açısıyla sahneye yerleştir (Instantiate)
-        Instantiate(carPrefabs[randomCar], spawnWalls[randomWall].position, spawnWalls[randomWall].rotation);
+        _difficultyTimer += Time.deltaTime;
+
+        if (_difficultyTimer >= difficultyIncreaseTimer)
+        {
+            // Zorluğu artır (süreyi kısalt). 
+            // Mathf.Max kullanarak sürenin Boss Mode sınırından daha aşağı düşmesini tek satırda engelliyoruz.
+            _currentSpawnInterval = Mathf.Max(bossModeSpawnInterval, _currentSpawnInterval - difficultyDecrement);
+            _difficultyTimer = 0f; // Zorluk sayacını sıfırla
+
+            // Boss Mode'a ulaşıldı mı kontrolü
+            if (_currentSpawnInterval <= bossModeSpawnInterval)
+            {
+                _isBossMode = true;
+                Debug.Log("🔥 BOSS MODE ACTIVATED: Maksimum trafik yoğunluğuna ulaşıldı!");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Instantiates a randomly selected car prefab at a randomly selected spawn wall.
+    /// </summary>
+    private void SpawnRandomVehicle()
+    {
+        // Array'ler boşsa hata vermemesi için güvenlik kontrolü (Null Exception önlemi)
+        if (carPrefabs.Length == 0 || spawnWalls.Length == 0) return;
+
+        int randomCarIndex = Random.Range(0, carPrefabs.Length);
+        int randomWallIndex = Random.Range(0, spawnWalls.Length);
+
+        GameObject selectedCar = carPrefabs[randomCarIndex];
+        GameObject selectedWall = spawnWalls[randomWallIndex];
+
+        Instantiate(selectedCar, selectedWall.transform.position, selectedWall.transform.rotation);
     }
 }
