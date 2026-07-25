@@ -3,59 +3,72 @@ using TMPro;
 
 public class CarAI : MonoBehaviour
 {
-    public float speed;
+    public int speed;
     public int speedLimit = 90;
     public bool isSpeeding = false;
     public TextMeshProUGUI speedText;
+    public float movementMultiplier = 30f;
 
-    // Arabaların fiziksel hızını artırmak için bir katsayı çarpanı
-    // Bunu Unity içinden (Inspector) istediğin gibi değiştirebilirsin!
-    public float movementMultiplier = 3f;
+    private bool _isProcessed = false;
 
-    void Start()
+    void Awake()
     {
+        // Araçların iç içe geçmemesi için hızın doğduğu milisaniye belirlenmesi (Awake) şart
         int randomSpeed = Random.Range(70, 121);
         speed = randomSpeed;
 
         if (speed > speedLimit)
         {
             isSpeeding = true;
-            speedText.color = Color.red;
+            if (speedText != null) speedText.color = Color.red;
         }
         else
         {
-            speedText.color = Color.green;
+            if (speedText != null) speedText.color = Color.green;
         }
 
-        speedText.text = speed.ToString() + " km/h";
+        if (speedText != null)
+        {
+            speedText.text = speed.ToString() + " km/h";
+        }
     }
 
     void Update()
     {
-        // 1. GÖRSEL HIZ KATSAYISI:
-        // Ekranda 78 yazsa bile, arka planda movementMultiplier (şu an 3) ile çarpılıp daha hızlı gidiyor.
+        // Arabayı ileri doğru hareket ettir
         transform.Translate(Vector3.forward * (speed / 10f) * movementMultiplier * Time.deltaTime);
 
-        // 2. YAZILARI KAMERAYA DÖNDÜRME (Billboard Efekti):
-        // Yazının açısını, doğrudan ana kameranın açısına eşitliyoruz. 
-        // Böylece araba hangi yöne giderse gitsin yazı hep sana doğru bakar.
         if (speedText != null)
         {
             speedText.transform.rotation = Camera.main.transform.rotation;
         }
     }
 
+    // Eski ve stabil tıklama mekanizmasına geri döndük
     private void OnMouseDown()
     {
+        if (_isProcessed) return;
+
+        _isProcessed = true;
+
+        if (speedText != null)
+        {
+            speedText.text = "CEZA!";
+            speedText.color = Color.blue;
+        }
+
         if (isSpeeding)
         {
-            Debug.Log("Tebrikler, doğru tespit! Puan kazandın.");
-            Destroy(gameObject);
+            Debug.Log("Doğru tespit! Hızlı araca ceza kestin.");
         }
         else
         {
-            Debug.Log("HATA! Masum araca ceza kestin. Can eksi 1");
-            Destroy(gameObject);
+            Debug.Log("HATA! Masum araca ceza kestin. Can gidiyor!");
+
+            if (GameManager.Instance != null)
+            {
+                GameManager.Instance.TakeDamage();
+            }
         }
     }
 }

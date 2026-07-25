@@ -4,19 +4,25 @@ public class DestroyWall : MonoBehaviour
 {
     private void OnTriggerEnter(Collider other)
     {
-        // Çarpan objenin üzerinde CarAI kodu var mı diye kontrol et
+        // Çarpan obje bir araba mı (CarAI scripti taşıyor mu) kontrol et
         CarAI car = other.GetComponent<CarAI>();
 
         if (car != null)
         {
-            // Eğer araba hızlıysa ve oyuncu onu tıklamadan duvara kadar kaçmayı başardıysa
-            if (car.isSpeeding)
+            // Eğer araç hız sınırını aşıyorsa VE biz ona tıklayıp ceza kesmemişsek (Yazısı CEZA değilse)
+            if (car.isSpeeding && car.speedText.text != "CEZA!")
             {
-                Debug.Log("Hızlı araç kaçtı! Can eksi 1");
-            }
-        }
+                Debug.Log("Uyarı: Hız sınırını aşan araç kaçtı! Can eksiliyor...");
 
-        // Hızlı da olsa yavaş da olsa ekrandan çıkan arabayı oyundan sil
-        Destroy(other.gameObject);
+                // GameManager'a bağlan, canı düşür, arayüzü (UI) güncelle ve gerekirse oyunu bitir!
+                if (GameManager.Instance != null)
+                {
+                    GameManager.Instance.TakeDamage();
+                }
+            }
+
+            // Araba sahnede görevini tamamladı, onu RAM'den tamamen sil
+            Destroy(other.gameObject);
+        }
     }
 }

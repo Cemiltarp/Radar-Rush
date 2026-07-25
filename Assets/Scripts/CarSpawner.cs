@@ -1,105 +1,169 @@
 using UnityEngine;
-
-/// <summary>
-/// Manages the dynamic spawning of vehicles. 
-/// Progressively increases difficulty by reducing spawn intervals until Boss Mode is reached.
-/// </summary>
+using System.Collections.Generic;
+using TMPro;
 public class CarSpawner : MonoBehaviour
 {
-    [Header("Spawn Settings")]
-    [Tooltip("Array of vehicle prefabs to be spawned.")]
-    public GameObject[] carPrefabs;
+    [Header("Stage (Aşama) Ayarları")]
+    public int[] carsPerStage = { 5, 10, 20, 30, 40, 50, 60, 75, 90, 120 };
+    private int _currentStageIndex = 0;
+    private int _carsSpawnedThisStage = 0;
 
-    [Tooltip("Array of wall objects where vehicles will spawn from.")]
+    [Header("Arayüz Bağlantıları")]
+    public TextMeshProUGUI stageText;
+
+    [Header("Araç ve Şerit Ayarları")]
+    public GameObject[] carPrefabs;
     public GameObject[] spawnWalls;
 
-    [Header("Difficulty & Time Settings")]
-    [Tooltip("Starting time delay (in seconds) between each spawn.")]
-    public float initialSpawnInterval = 3f;
+    [Header("Matematiksel Çarpışma Önleyici")]
+    public float roadLength = 80f;
+    public float maxPossibleSpeed = 120f;
+    [Tooltip("Araçlar arasına eklenecek garanti fiziksel boşluk (saniye)")]
+    public float safetyBuffer = 1.5f; // İç içe geçmeye karşı güvenliği artırdık
 
-    [Tooltip("Minimum time delay between spawns (Maximum difficulty / Boss Mode).")]
-    public float bossModeSpawnInterval = 0.5f;
+    private float[] _laneCooldowns;
 
-    [Tooltip("How much the spawn interval decreases each time difficulty scales up.")]
-    public float difficultyDecrement = 0.2f;
+    // Şeritleri eşit dağıtmak için en son kullanılan şeridi aklında tutar
+    private int _lastUsedLaneIndex = -1;
 
-    [Tooltip("Time interval (in seconds) required to increase the game difficulty.")]
-    public float difficultyIncreaseTimer = 5f;
+    [Header("Zorluk (Zaman) Ayarları")]
+    public float baseSpawnDelay = 2.5f;
+    public float minSpawnDelay = 0.8f;
 
-    // Internal state variables 
-    // Not: Profesyonel C# standartlarında private değişkenler alt tire (_) ile başlar.
-    private float _currentSpawnInterval;
-    private float _spawnTimer;
-    private float _difficultyTimer;
-    private bool _isBossMode = false;
+    private float _currentSpawnDelay;
+    private float _spawnTimer = 0f;
+
+    private bool _isStageSpawning = true;
+    private bool _gameWon = false;
 
     private void Start()
     {
-        // Oyunu başlangıç zorluğu ile başlat
-        _currentSpawnInterval = initialSpawnInterval;
+        _laneCooldowns = new float[spawnWalls.Length];
+        StartStage();
     }
 
     private void Update()
     {
-        HandleSpawning();
-        HandleDifficultyProgression();
-    }
+        if (_gameWon) return;
 
-    /// <summary>
-    /// Handles the countdown and instantiation of vehicles.
-    /// </summary>
-    private void HandleSpawning()
-    {
-        _spawnTimer += Time.deltaTime;
+        UpdateLaneCooldowns();
 
-        if (_spawnTimer >= _currentSpawnInterval)
+        if (_isStageSpawning)
         {
-            SpawnRandomVehicle();
-            _spawnTimer = 0f; // Spawn sayacını sıfırla
-        }
-    }
+            _spawnTimer += Time.deltaTime;
 
-    /// <summary>
-    /// Gradually decreases the spawn interval to increase game difficulty over time.
-    /// Clamps at bossModeSpawnInterval.
-    /// </summary>
-    private void HandleDifficultyProgression()
-    {
-        // Eğer zaten maksimum zorluktaysak (Boss Mode), hesaplama yapmayı bırakarak performansı koru
-        if (_isBossMode) return;
-
-        _difficultyTimer += Time.deltaTime;
-
-        if (_difficultyTimer >= difficultyIncreaseTimer)
-        {
-            // Zorluğu artır (süreyi kısalt). 
-            // Mathf.Max kullanarak sürenin Boss Mode sınırından daha aşağı düşmesini tek satırda engelliyoruz.
-            _currentSpawnInterval = Mathf.Max(bossModeSpawnInterval, _currentSpawnInterval - difficultyDecrement);
-            _difficultyTimer = 0f; // Zorluk sayacını sıfırla
-
-            // Boss Mode'a ulaşıldı mı kontrolü
-            if (_currentSpawnInterval <= bossModeSpawnInterval)
+            if (_spawnTimer >= _currentSpawnDelay && _carsSpawnedThisStage < carsPerStage[_currentStageIndex])
             {
-                _isBossMode = true;
-                Debug.Log("🔥 BOSS MODE ACTIVATED: Maksimum trafik yoğunluğuna ulaşıldı!");
+                TrySpawnCar();
+            }
+
+            if (_carsSpawnedThisStage >= carsPerStage[_currentStageIndex])
+            {
+                _isStageSpawning = false;
+            }
+        }
+        else
+        {
+            if (FindObjectsByType<CarAI>(FindObjectsSortMode.None).Length == 0)
+            {
+                NextStage();
             }
         }
     }
 
-    /// <summary>
-    /// Instantiates a randomly selected car prefab at a randomly selected spawn wall.
-    /// </summary>
-    private void SpawnRandomVehicle()
+    private void UpdateLaneCooldowns()
     {
-        // Array'ler boşsa hata vermemesi için güvenlik kontrolü (Null Exception önlemi)
+        for (int i = 0; i < _laneCooldowns.Length; i++)
+        {
+            if (_laneCooldowns[i] > 0)
+            {
+                _laneCooldowns[i] -= Time.deltaTime;
+            }
+        }
+    }
+
+    private void TrySpawnCar()
+    {
         if (carPrefabs.Length == 0 || spawnWalls.Length == 0) return;
 
+        // DENGELİ ŞERİT SEÇİMİ (Round-Robin Algoritması)
+        // Rastgele seçmek yerine, en son çıkılan şeridin bir sonrakine bakar. 
+        // Doluysa diğerine geçer. Böylece trafik tüm yola eşit yayılır.
+        int selectedLaneIndex = -1;
+
+        for (int i = 1; i <= spawnWalls.Length; i++)
+        {
+            int checkIndex = (_lastUsedLaneIndex + i) % spawnWalls.Length;
+
+            if (_laneCooldowns[checkIndex] <= 0f)
+            {
+                selectedLaneIndex = checkIndex;
+                break;
+            }
+        }
+
+        // Eğer tüm şeritlerin süresi kilitliyse, üretimi pas geç (iç içe geçmeyi engeller)
+        if (selectedLaneIndex == -1) return;
+
         int randomCarIndex = Random.Range(0, carPrefabs.Length);
-        int randomWallIndex = Random.Range(0, spawnWalls.Length);
+        GameObject selectedCarPrefab = carPrefabs[randomCarIndex];
+        GameObject selectedWall = spawnWalls[selectedLaneIndex];
 
-        GameObject selectedCar = carPrefabs[randomCarIndex];
-        GameObject selectedWall = spawnWalls[randomWallIndex];
+        // Aracı Sahnede Yarat
+        GameObject spawnedCar = Instantiate(selectedCarPrefab, selectedWall.transform.position, selectedWall.transform.rotation);
 
-        Instantiate(selectedCar, selectedWall.transform.position, selectedWall.transform.rotation);
+        // Dinamik Matematik Hesaplaması
+        CarAI carScript = spawnedCar.GetComponent<CarAI>();
+        if (carScript != null)
+        {
+            float realSpeed = (carScript.speed / 10f) * carScript.movementMultiplier;
+            float maxRealSpeed = (maxPossibleSpeed / 10f) * carScript.movementMultiplier;
+
+            float timeToFinish = roadLength / realSpeed;
+            float minTimeToFinish = roadLength / maxRealSpeed;
+
+            float dynamicCooldown = (timeToFinish - minTimeToFinish) + safetyBuffer;
+
+            // Şeridi hesaplanan bu süre kadar kilitle
+            _laneCooldowns[selectedLaneIndex] = Mathf.Max(safetyBuffer, dynamicCooldown);
+        }
+
+        // En son kullandığımız şeridi hafızaya al ki bir dahaki sefere diğerinden başlasın
+        _lastUsedLaneIndex = selectedLaneIndex;
+
+        _carsSpawnedThisStage++;
+        _spawnTimer = 0f;
+    }
+
+    private void NextStage()
+    {
+        _currentStageIndex++;
+
+        if (stageText != null)
+        {
+            // Mevcut stage değerini (currentStage) ekrana yazdır
+            // Eğer index 0'dan başlıyorsa, oyuncu için (currentStage + 1) olarak yazdırabilirsin
+            stageText.text = "STAGE: " + (_currentStageIndex + 1).ToString();
+        }
+
+        if (_currentStageIndex >= carsPerStage.Length)
+        {
+            Debug.Log("🏆 OYUN BİTTİ! 10. Stage Tamamlandı!");
+            _gameWon = true;
+            return;
+        }
+
+        StartStage();
+    }
+
+    private void StartStage()
+    {
+        _carsSpawnedThisStage = 0;
+        _isStageSpawning = true;
+
+        float difficultyFactor = (float)_currentStageIndex / (carsPerStage.Length - 1);
+        _currentSpawnDelay = Mathf.Lerp(baseSpawnDelay, minSpawnDelay, difficultyFactor);
+
+        Debug.Log($"🏁 STAGE {_currentStageIndex + 1} BAŞLADI! Gelecek araç sayısı: {carsPerStage[_currentStageIndex]}");
     }
 }
