@@ -1,6 +1,7 @@
 using UnityEngine;
 using TMPro;
 
+
 public class CarAI : MonoBehaviour
 {
     public int speed;
@@ -11,8 +12,11 @@ public class CarAI : MonoBehaviour
 
     private bool _isProcessed = false;
 
+    private AudioSource sirenSound;
+
     void Awake()
     {
+        sirenSound = GetComponent<AudioSource>();
         // Araçların iç içe geçmemesi için hızın doğduğu milisaniye belirlenmesi (Awake) şart
         int randomSpeed = Random.Range(70, 121);
         speed = randomSpeed;
@@ -31,6 +35,8 @@ public class CarAI : MonoBehaviour
         {
             speedText.text = speed.ToString() + " km/h";
         }
+
+       
     }
 
     void Update()
@@ -69,6 +75,34 @@ public class CarAI : MonoBehaviour
             {
                 GameManager.Instance.TakeDamage();
             }
+        }
+
+        if (speedText != null)
+        {
+            speedText.text = "CEZA!";
+            speedText.color = Color.blue;
+        }
+
+        // YENİ: Ceza yazıldığında sireni çal!
+        if (sirenSound != null)
+        {
+            sirenSound.Play();
+        }
+
+        if (sirenSound != null)
+        {
+            sirenSound.Play();
+
+           
+            Invoke("StopSiren",0.6f);
+        }
+    }
+
+    private void StopSiren()
+    {
+        if (sirenSound != null && sirenSound.isPlaying)
+        {
+            sirenSound.Stop(); 
         }
     }
 }
