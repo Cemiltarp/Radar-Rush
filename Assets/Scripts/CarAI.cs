@@ -86,15 +86,13 @@ public class CarAI : MonoBehaviour
         // YENİ: Ceza yazıldığında sireni çal!
         if (sirenSound != null)
         {
-            sirenSound.Play();
-        }
-
-        if (sirenSound != null)
-        {
-            sirenSound.Play();
-
            
-            Invoke("StopSiren",0.6f);
+            sirenSound.time = 3f;
+
+            sirenSound.Play();
+
+            // (Eğer daha önce eklediysen) Sesi belirli bir süre sonra durduracak komut
+            Invoke("StopSiren", 1.5f);
         }
     }
 
