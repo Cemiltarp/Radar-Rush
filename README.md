@@ -19,6 +19,12 @@ The speed limit is **90 km/h**.
 ##  Built With
 * **Engine:** Unity 3D (C#)
 * **UI:** TextMeshPro
+## Known Issues & Technical Debt
+
+* **Minimalist UI/UX:** The current user interface is highly basic and remains at the prototype stage. 
+* **Limited Gameplay Loop:** Due to the strict 1-week development timeline, the core gameplay duration is relatively short.
+* **Lack of Asset Diversity:** Vehicle models and enemy types are currently monotonous and highly repetitive.
+* **Basic Visual Fidelity:** The game relies on "programmer art" and placeholder graphics; overall visual representation leaves significant room for improvement.
 
 Developed by **Said Cemil Tarpıcı**
 
